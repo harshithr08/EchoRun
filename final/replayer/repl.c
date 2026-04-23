@@ -2,10 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 void repl_run(ReplaySession *s) {
     char line[256];
-    printf("\n[EchoRun REPL] Commands: continue | step | goto <seq> | peek <addr> | poke <addr> <val> | quit\n");
+    printf("\n[EchoRun REPL] Commands: continue | step | goto <seq> | peek <addr> | poke <addr> <val> | checkpoints | quit\n");
 
     while (1) {
         printf("echoplay> ");
@@ -42,12 +43,29 @@ void repl_run(ReplaySession *s) {
                 printf("Usage: poke <hex_addr> <decimal_val>\n");
             }
 
+        } else if (strcmp(line, "checkpoints") == 0 || strcmp(line, "cp") == 0) {
+            // Improvement 4: list all saved checkpoint positions
+            if (s->cp_count == 0) {
+                printf("[REPL] No checkpoints saved yet.\n");
+            } else {
+                printf("[REPL] %d checkpoint(s) saved:\n", s->cp_count);
+                for (int i = 0; i < s->cp_count; i++) {
+                    Checkpoint *cp = s->checkpoints[i];
+                    if (cp) {
+                        printf("  [%d] seq=%" PRIu64 "  regions=%d\n",
+                               i, cp->seq_idx, cp->region_count);
+                    }
+                }
+                printf("  Use: goto <seq> to jump to any of these.\n");
+            }
+
         } else if (strcmp(line, "quit") == 0 || strcmp(line, "q") == 0) {
             printf("[EchoRun] Exiting.\n");
             exit(0);
 
         } else if (line[0] != '\0') {
             printf("Unknown command: '%s'\n", line);
+            printf("Commands: continue | step | goto <seq> | peek <addr> | poke <addr> <val> | checkpoints | quit\n");
         }
     }
 }

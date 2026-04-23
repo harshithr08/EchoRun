@@ -85,14 +85,48 @@ int trace_diff(const char *trace_a_bin, const char *trace_a_idx,
     return record->found ? 1 : 0;
 }
 
+// Improvement 2: Full syscall name table — matches all 31 entries in sys_cat_info.c
+// plus additional common syscalls for complete coverage.
 static const char *sname(uint32_t no) {
     switch (no) {
-        case 0:  return "read";      case 1:  return "write";
-        case 2:  return "open";      case 3:  return "close";
-        case 9:  return "mmap";      case 12: return "brk";
-        case 39: return "getpid";    case 45: return "recvfrom";
-        case 60: return "exit";      case 318:return "getrandom";
-        default: return "syscall";
+        case 0:   return "read";
+        case 1:   return "write";
+        case 2:   return "open";
+        case 3:   return "close";
+        case 4:   return "stat";
+        case 5:   return "fstat";
+        case 6:   return "lstat";
+        case 8:   return "lseek";
+        case 9:   return "mmap";
+        case 10:  return "mprotect";
+        case 11:  return "munmap";
+        case 12:  return "brk";
+        case 13:  return "rt_sigaction";
+        case 14:  return "rt_sigprocmask";
+        case 17:  return "pread64";
+        case 18:  return "pwrite64";
+        case 32:  return "dup";
+        case 33:  return "dup2";
+        case 39:  return "getpid";
+        case 41:  return "socket";
+        case 42:  return "connect";
+        case 43:  return "accept";
+        case 44:  return "sendto";
+        case 45:  return "recvfrom";
+        case 56:  return "clone";
+        case 57:  return "fork";
+        case 59:  return "execve";
+        case 60:  return "exit";
+        case 61:  return "wait4";
+        case 62:  return "kill";
+        case 72:  return "fcntl";
+        case 96:  return "gettimeofday";
+        case 102: return "getuid";
+        case 228: return "clock_gettime";
+        case 231: return "exit_group";
+        case 235: return "uname";
+        case 318: return "getrandom";
+        default:  return "unknown";
     }
 }
 
