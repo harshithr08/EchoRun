@@ -9,8 +9,8 @@
 <text x="600" y="20" fill="#e0e0e0" font-size="14" text-anchor="middle">EchoRun Trace Timeline (6 events)</text>
 <line x1="80" y1="185" x2="80" y2="215" stroke="#4CAF50" stroke-width="2" opacity="0.85"><title>stat() seq=0 ret=0</title></line>
 <line x1="355" y1="45" x2="355" y2="75" stroke="#4A90D9" stroke-width="2" opacity="0.85"><title>read() seq=4 ret=832</title></line>
-<line x1="973" y1="45" x2="973" y2="75" stroke="#4A90D9" stroke-width="2" opacity="0.85"><title>read() seq=13 ret=13</title></line>
-<line x1="1042" y1="45" x2="1042" y2="75" stroke="#4A90D9" stroke-width="2" opacity="0.85"><title>read() seq=14 ret=14</title></line>
+<line x1="836" y1="45" x2="836" y2="75" stroke="#4A90D9" stroke-width="2" opacity="0.85"><title>read() seq=11 ret=21</title></line>
+<line x1="1042" y1="45" x2="1042" y2="75" stroke="#4A90D9" stroke-width="2" opacity="0.85"><title>read() seq=14 ret=127</title></line>
 <line x1="1111" y1="185" x2="1111" y2="215" stroke="#4CAF50" stroke-width="2" opacity="0.85"><title>syscall() seq=15 ret=0</title></line>
 <line x1="1180" y1="185" x2="1180" y2="215" stroke="#4CAF50" stroke-width="2" opacity="0.85"><title>read() seq=16 ret=0</title></line>
 <line x1="80" y1="270" x2="1180" y2="270" stroke="#444" stroke-width="1"/>
