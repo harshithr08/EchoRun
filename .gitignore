@@ -1,0 +1,38 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# C / native build outputs
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+
+# Generated executables
+/final/recorder/echorun
+/final/recorder/dump_trace
+/final/recorder/tracee
+/final/recorder/tracee2
+/final/recorder/tracee3
+/final/replayer/echoplay
+/final/visualizer/echovis
+
+# Generated trace artifacts
+/trace.bin
+/trace.idx
+/final/recorder/trace.bin
+/final/recorder/trace.idx
+/out/
+
+# Dashboard frontend artifacts
+/dashboard-CHANGE/node_modules/
+/dashboard-CHANGE/dist/
