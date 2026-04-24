@@ -1,8 +1,9 @@
-// echovis.c — EchoRun Visualizer + Diff CLI
+// echovis.c — EchoRun Visualizer + Diff + Summarise CLI
 // Usage:
 //   ./echovis visualise <trace.bin> <trace.idx> [--output out.svg] [--tui]
 //                       [--divergence <seq> <exp_syscall> <act_syscall>]
-//   ./echovis diff <a.bin> <a.idx> <b.bin> <b.idx> [--output diff.svg]
+//   ./echovis diff      <a.bin> <a.idx> <b.bin> <b.idx> [--output diff.svg]
+//   ./echovis summarise <trace.bin> <trace.idx>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,9 +21,10 @@ static void usage(const char *prog) {
         "     --divergence <seq> <expected_syscall> <actual_syscall>\n"
         "                            overlay a divergence marker\n\n"
         "  %s diff <a.bin> <a.idx> <b.bin> <b.idx> [options]\n"
-        "     --output <file.svg>    also render SVG of trace A with divergence\n"
-        "                            marker overlaid at the found divergence point\n",
-        prog, prog);
+        "     --output <file.svg>    render SVG of trace A with divergence marker\n\n"
+        "  %s summarise <trace.bin> <trace.idx>\n"
+        "     print a human-readable narrative of what the program did\n",
+        prog, prog, prog);
 }
 
 // Improvement 3: print event breakdown stats after loading a trace
@@ -30,9 +32,8 @@ static void print_event_stats(const EventList *el) {
     if (!el || el->count == 0) return;
 
     uint64_t syscall_count = 0, signal_count = 0, proc_count = 0;
+    uint32_t freq[400] = {0};
 
-    // Count most frequent syscall
-    uint32_t freq[400] = {0};  // covers syscall numbers 0-399
     for (uint64_t i = 0; i < el->count; i++) {
         switch (el->events[i].event_type) {
             case 1: syscall_count++;
@@ -44,14 +45,11 @@ static void print_event_stats(const EventList *el) {
         }
     }
 
-    // Find most frequent syscall
-    uint32_t top_no = 0;
-    uint32_t top_count = 0;
+    uint32_t top_no = 0, top_count = 0;
     for (int i = 0; i < 400; i++) {
         if (freq[i] > top_count) { top_count = freq[i]; top_no = (uint32_t)i; }
     }
 
-    // Resolve top syscall name using the same table as trace_diff
     static const char *sname_map[] = {
         [0]="read",[1]="write",[2]="open",[3]="close",[4]="stat",
         [5]="fstat",[9]="mmap",[11]="munmap",[12]="brk",[39]="getpid",
@@ -66,6 +64,174 @@ static void print_event_stats(const EventList *el) {
     printf("      PROC    : %" PRIu64 "\n", proc_count);
     if (top_count > 0)
         printf("      Most frequent syscall: %s() x%u\n", top_name, top_count);
+}
+
+// ── Improvement 3: summarise subcommand ──────────────────────────────────
+// Pattern-matches on the event stream to produce a human-readable narrative
+// of what the program did, grouped into phases.
+
+static const char *syscall_name_full(uint32_t no) {
+    switch (no) {
+        case 0:   return "read";       case 1:   return "write";
+        case 2:   return "open";       case 3:   return "close";
+        case 4:   return "stat";       case 5:   return "fstat";
+        case 6:   return "lstat";      case 8:   return "lseek";
+        case 9:   return "mmap";       case 10:  return "mprotect";
+        case 11:  return "munmap";     case 12:  return "brk";
+        case 13:  return "rt_sigaction"; case 14: return "rt_sigprocmask";
+        case 32:  return "dup";        case 33:  return "dup2";
+        case 39:  return "getpid";     case 41:  return "socket";
+        case 42:  return "connect";    case 43:  return "accept";
+        case 44:  return "sendto";     case 45:  return "recvfrom";
+        case 56:  return "clone";      case 57:  return "fork";
+        case 59:  return "execve";     case 60:  return "exit";
+        case 61:  return "wait4";      case 62:  return "kill";
+        case 72:  return "fcntl";      case 96:  return "gettimeofday";
+        case 102: return "getuid";     case 228: return "clock_gettime";
+        case 231: return "exit_group"; case 235: return "uname";
+        case 318: return "getrandom";
+        default:  return "unknown";
+    }
+}
+
+static int subcmd_summarise(int argc, char *argv[]) {
+    if (argc < 3) {
+        fprintf(stderr, "summarise needs <trace.bin> <trace.idx>\n");
+        return 1;
+    }
+
+    EventList *el = load_events(argv[1], argv[2]);
+    if (!el) return 1;
+
+    printf("\n[SUMMARY] Program execution narrative (%" PRIu64 " events)\n",
+           el->count);
+    printf("──────────────────────────────────────────────────────\n");
+
+    // Phase counters
+    uint32_t mmap_count   = 0, fstat_count  = 0;
+    uint32_t open_count   = 0, close_count  = 0;
+    uint32_t read_count   = 0, write_count  = 0;
+    uint32_t rng_count    = 0, net_count    = 0;
+    uint32_t signal_count = 0, proc_count   = 0;
+    uint32_t time_count   = 0, other_count  = 0;
+
+    int64_t  total_bytes_read    = 0;
+    int64_t  total_bytes_written = 0;
+    int      stdin_read          = 0;
+    int      stdout_write        = 0;
+    int      exit_code           = -1;
+    int      exec_seen           = 0;
+    int      fork_seen           = 0;
+
+    for (uint64_t i = 0; i < el->count; i++) {
+        const VisEvent *ve = &el->events[i];
+
+        if (ve->event_type == 2) { signal_count++; continue; }
+        if (ve->event_type == 3) {
+            proc_count++;
+            // PROC_EVENT with syscall_no == 59 = execve
+            // syscall_no == 57 or 56 = fork/clone
+            // retval used as exit code when syscall_no == 0 (exit)
+            if (ve->syscall_no == 59) exec_seen = 1;
+            if (ve->syscall_no == 57 || ve->syscall_no == 56) fork_seen = 1;
+            if (ve->syscall_no == 0 && ve->retval >= 0)
+                exit_code = (int)ve->retval;
+            continue;
+        }
+
+        // SYSCALL_EVENT
+        switch (ve->syscall_no) {
+            case 9:  mmap_count++;  break;
+            case 5:  fstat_count++; break;
+            case 2:  open_count++;  break;
+            case 3:  close_count++; break;
+            case 0:  // read
+                read_count++;
+                if (ve->retval > 0) total_bytes_read += ve->retval;
+                // fd stored in rdi during record but not in trace —
+                // heuristic: early reads with large retval are loader,
+                // later smaller reads with retval <= 256 tend to be user I/O
+                if (ve->retval > 0 && ve->retval <= 256 && read_count > 3)
+                    stdin_read = 1;
+                break;
+            case 1:  // write
+                write_count++;
+                if (ve->retval > 0) total_bytes_written += ve->retval;
+                stdout_write = 1;
+                break;
+            case 318: rng_count++;  break;
+            case 41: case 42: case 43:
+            case 44: case 45: net_count++; break;
+            case 96: case 228: time_count++; break;
+            default: other_count++; break;
+        }
+    }
+
+    int step = 1;
+
+    // Phase 1: loader activity
+    if (mmap_count > 0 || fstat_count > 0 || exec_seen) {
+        printf("  %d. [Startup] Loaded dynamic libraries and mapped binary\n", step++);
+        printf("     (%u mmap, %u fstat/stat calls — typical ELF loader activity)\n",
+               mmap_count, fstat_count);
+    }
+
+    // Phase 2: process events
+    if (fork_seen)
+        printf("  %d. [Process] Forked a child process\n", step++);
+
+    // Phase 3: randomness
+    if (rng_count > 0)
+        printf("  %d. [Entropy] Called getrandom() %u time(s) — "
+               "used hardware RNG\n", step++, rng_count);
+
+    // Phase 4: time
+    if (time_count > 0)
+        printf("  %d. [Time] Called gettimeofday/clock_gettime %u time(s)\n",
+               step++, time_count);
+
+    // Phase 5: file I/O
+    if (open_count > 0 || read_count > 0) {
+        printf("  %d. [File I/O] Opened %u file(s), read %" PRId64 " bytes total "
+               "across %u read() call(s)\n",
+               step++, open_count, total_bytes_read, read_count);
+    }
+
+    // Phase 6: stdin
+    if (stdin_read)
+        printf("  %d. [Input] Read from stdin (interactive or pipe input)\n",
+               step++);
+
+    // Phase 7: network
+    if (net_count > 0)
+        printf("  %d. [Network] Made %u network-related call(s) "
+               "(socket/connect/send/recv)\n", step++, net_count);
+
+    // Phase 8: output
+    if (write_count > 0 && stdout_write)
+        printf("  %d. [Output] Wrote %" PRId64 " bytes to stdout/stderr "
+               "across %u write() call(s)\n",
+               step++, total_bytes_written, write_count);
+
+    // Phase 9: signals
+    if (signal_count > 0)
+        printf("  %d. [Signals] %u signal event(s) recorded during execution\n",
+               step++, signal_count);
+
+    // Phase 10: exit
+    if (exit_code >= 0)
+        printf("  %d. [Exit] Exited cleanly with code %d\n", step++, exit_code);
+    else
+        printf("  %d. [Exit] Process terminated\n", step++);
+
+    printf("──────────────────────────────────────────────────────\n");
+
+    // Misc unknown syscalls
+    if (other_count > 0)
+        printf("  (%u other syscall(s) not categorized above)\n", other_count);
+
+    free_events(el);
+    return 0;
 }
 
 // ── visualise subcommand ─────────────────────────────────────────────────
@@ -95,8 +261,6 @@ static int subcmd_visualise(int argc, char *argv[]) {
     if (!el) return 1;
 
     printf("[VIS] Loaded %" PRIu64 " events from %s\n", el->count, bin_path);
-
-    // Improvement 3: always show stats
     print_event_stats(el);
 
     if (tui_mode) {
@@ -113,13 +277,12 @@ static int subcmd_visualise(int argc, char *argv[]) {
 
 // ── diff subcommand ──────────────────────────────────────────────────────
 static int subcmd_diff(int argc, char *argv[]) {
-    // argv[0]="diff" argv[1]=a.bin argv[2]=a.idx argv[3]=b.bin argv[4]=b.idx
     if (argc < 5) {
         fprintf(stderr, "diff needs <a.bin> <a.idx> <b.bin> <b.idx>\n");
         return 1;
     }
 
-    // Improvement 1: optional --output flag to auto-render SVG with divergence
+    // Improvement 1: optional --output to auto-render SVG with divergence marker
     const char *svg_out = NULL;
     for (int i = 5; i < argc; i++) {
         if (strcmp(argv[i], "--output") == 0 && i+1 < argc) {
@@ -133,14 +296,11 @@ static int subcmd_diff(int argc, char *argv[]) {
 
     print_diff_record(&rec);
 
-    // Improvement 1: if divergence found and --output given, render SVG of
-    // trace A with the divergence marker overlaid automatically.
     if (rec.found && svg_out) {
         EventList *el = load_events(argv[1], argv[2]);
         if (el) {
             printf("[VIS] Loaded %" PRIu64 " events from %s\n", el->count, argv[1]);
             print_event_stats(el);
-
             DivergenceReport div = {
                 .seq_idx          = rec.seq_idx,
                 .expected_syscall = rec.a_syscall,
@@ -152,7 +312,6 @@ static int subcmd_diff(int argc, char *argv[]) {
             free_events(el);
         }
     } else if (!rec.found && svg_out) {
-        // Traces identical — render clean SVG anyway
         EventList *el = load_events(argv[1], argv[2]);
         if (el) {
             print_event_stats(el);
@@ -173,6 +332,8 @@ int main(int argc, char *argv[]) {
         return subcmd_visualise(argc - 1, argv + 1);
     if (strcmp(argv[1], "diff") == 0)
         return subcmd_diff(argc - 1, argv + 1);
+    if (strcmp(argv[1], "summarise") == 0)
+        return subcmd_summarise(argc - 1, argv + 1);
 
     fprintf(stderr, "Unknown subcommand: %s\n", argv[1]);
     usage(argv[0]);

@@ -16,16 +16,64 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
+// Improvement 2: Replay confidence score
+// Tracks injection quality and prints a score 0-100 at end of replay.
+typedef struct {
+    uint64_t total_ndet;       // total NON_DET syscall stops seen
+    uint64_t injected;         // successfully matched + injected from trace
+    uint64_t unmatched;        // NON_DET stops with no matching trace event
+    uint64_t signals_injected; // signals replayed
+} ReplayStats;
+
+static void print_confidence(const ReplayStats *st) {
+    // Score formula:
+    //   base = injected / total_ndet  (coverage)
+    //   penalty for each unmatched NON_DET (let through to real kernel)
+    //   signals add a small bonus since they require extra coordination
+
+    double coverage = (st->total_ndet > 0)
+                    ? (double)st->injected / (double)st->total_ndet
+                    : 1.0;
+
+    // Each unmatched event reduces confidence by up to 5 points
+    double unmatched_penalty = (st->total_ndet > 0)
+                              ? ((double)st->unmatched / (double)st->total_ndet) * 20.0
+                              : 0.0;
+
+    double score_raw = coverage * 100.0 - unmatched_penalty;
+    if (score_raw < 0.0)  score_raw = 0.0;
+    if (score_raw > 100.0) score_raw = 100.0;
+    int score = (int)score_raw;
+
+    const char *rating;
+    if (score >= 95)      rating = "EXCELLENT — replay is highly deterministic";
+    else if (score >= 80) rating = "GOOD — minor non-determinism possible";
+    else if (score >= 60) rating = "FAIR — some syscalls fell through to kernel";
+    else                  rating = "POOR — significant divergence risk (ASLR?)";
+
+    printf("\n[ECHOPLAY] Replay confidence: %d/100  (%s)\n", score, rating);
+    printf("  NON_DET syscalls seen    : %" PRIu64 "\n", st->total_ndet);
+    printf("  Successfully injected    : %" PRIu64 "\n", st->injected);
+    printf("  Unmatched (let through)  : %" PRIu64 "\n", st->unmatched);
+    printf("  Signals replayed         : %" PRIu64 "\n", st->signals_injected);
+    if (st->unmatched > 0)
+        printf("  Tip: unmatched events are usually mmap/brk calls whose "
+               "addresses may differ due to ASLR not being disabled.\n");
+}
+
 int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
     int status;
     int is_entry          = 1;
     int suppress_pending  = 0;
-    int is_ndet_pending   = 0;   // was this syscall NON_DET at entry?
+    int is_ndet_pending   = 0;
     int64_t  saved_retval = 0;
     uint64_t saved_bufaddr = 0;
     uint8_t *saved_data   = NULL;
     uint32_t saved_datalen = 0;
     uint64_t events_since_checkpoint = 0;
+
+    // Improvement 2: stats counters
+    ReplayStats stats = {0};
 
     // Mirror the recorder's options so we see the same PROC_EVENTs
     ptrace(PTRACE_SETOPTIONS, s->pid, 0,
@@ -37,6 +85,7 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
 
         if (WIFEXITED(status)) {
             printf("[REPLAY] Tracee exited with code %d\n", WEXITSTATUS(status));
+            print_confidence(&stats);
             return 0;
         }
 
@@ -45,8 +94,6 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
         int sig = WSTOPSIG(status);
 
         // ── Ptrace event stop (exec/exit) ─────────────────────────────────
-        // Recorder wrote PROC_EVENT here and incremented seq_idx.
-        // We must do the same so our counter stays in sync.
         if (sig == SIGTRAP && (status >> 16) != 0) {
             struct EventRecorder *ev = cursor_peek(s->cursor);
             if (ev != NULL && s->cursor->seq_counter == ev->seq_idx
@@ -71,6 +118,7 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
                     free(s->cursor->current_data);
                     s->cursor->current_data = NULL;
                 }
+                stats.signals_injected++;
             }
             s->cursor->seq_counter++;
             inject_signal(s->pid, sig);
@@ -90,7 +138,8 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
             suppress_pending = 0;
 
             if (cat == NON_DET) {
-                // Check if this NON_DET syscall is the one in the trace
+                stats.total_ndet++;
+
                 struct EventRecorder *ev = cursor_peek(s->cursor);
 
                 if (ev != NULL && s->cursor->seq_counter == ev->seq_idx
@@ -99,10 +148,10 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
                     if (check_divergence(ev->syscall_no, incoming_syscall,
                                          ev->seq_idx, report_out)) {
                         print_divergence(report_out);
+                        print_confidence(&stats);
                         return -1;
                     }
 
-                    // Consume event and set up injection
                     cursor_consume(s->cursor);
                     ev = &s->cursor->current_ev;
 
@@ -122,6 +171,8 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
                             saved_bufaddr = regs.rdi;
                     }
 
+                    stats.injected++;
+
                     printf("[REPLAY] Entry: suppressed syscall=%u seq=%" PRIu64 "\n",
                            incoming_syscall, ev->seq_idx);
 
@@ -132,11 +183,10 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
                         if (cp) session_push_checkpoint(s, cp);
                         events_since_checkpoint = 0;
                     }
+                } else {
+                    // NON_DET but no trace event at this seq — let real syscall run
+                    stats.unmatched++;
                 }
-                // else: NON_DET but not in trace at this position (mmap/brk/etc
-                // that returned an address — recorder consumed the seq slot but
-                // didn't write an event). Let the real syscall run; we increment
-                // seq_counter at the exit stop below.
             }
 
             if (s->running == 2) {   // step mode
@@ -160,7 +210,6 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
                 printf("[REPLAY] Exit: injected retval=%" PRId64 "\n", saved_retval);
             }
 
-            // Mirror recorder: seq_idx increments on every NON_DET syscall exit
             if (is_ndet_pending) {
                 s->cursor->seq_counter++;
                 is_ndet_pending = 0;
@@ -170,5 +219,6 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
         is_entry = !is_entry;
     }
 
+    print_confidence(&stats);
     return 0;
 }
