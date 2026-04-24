@@ -19,29 +19,21 @@
 // Improvement 2: Replay confidence score
 // Tracks injection quality and prints a score 0-100 at end of replay.
 typedef struct {
-    uint64_t total_ndet;       // total NON_DET syscall stops seen
-    uint64_t injected;         // successfully matched + injected from trace
-    uint64_t unmatched;        // NON_DET stops with no matching trace event
-    uint64_t signals_injected; // signals replayed
+    uint64_t total_ndet;        // total NON_DET syscall stops seen
+    uint64_t injected;          // successfully matched + injected from trace
+    uint64_t trace_unmatched;   // trace events that had a seq/syscall mismatch
+    uint64_t signals_injected;  // signals replayed
 } ReplayStats;
 
 static void print_confidence(const ReplayStats *st) {
-    // Score formula:
-    //   base = injected / total_ndet  (coverage)
-    //   penalty for each unmatched NON_DET (let through to real kernel)
-    //   signals add a small bonus since they require extra coordination
+    // Score is based on recorded trace events only.
+    // Loader mmap/brk calls that were never recorded don't count against us.
+    uint64_t trace_total = st->injected + st->trace_unmatched;
 
-    double coverage = (st->total_ndet > 0)
-                    ? (double)st->injected / (double)st->total_ndet
-                    : 1.0;
-
-    // Each unmatched event reduces confidence by up to 5 points
-    double unmatched_penalty = (st->total_ndet > 0)
-                              ? ((double)st->unmatched / (double)st->total_ndet) * 20.0
-                              : 0.0;
-
-    double score_raw = coverage * 100.0 - unmatched_penalty;
-    if (score_raw < 0.0)  score_raw = 0.0;
+    double score_raw = (trace_total > 0)
+                     ? ((double)st->injected / (double)trace_total) * 100.0
+                     : 100.0;
+    if (score_raw < 0.0)   score_raw = 0.0;
     if (score_raw > 100.0) score_raw = 100.0;
     int score = (int)score_raw;
 
@@ -54,11 +46,8 @@ static void print_confidence(const ReplayStats *st) {
     printf("\n[ECHOPLAY] Replay confidence: %d/100  (%s)\n", score, rating);
     printf("  NON_DET syscalls seen    : %" PRIu64 "\n", st->total_ndet);
     printf("  Successfully injected    : %" PRIu64 "\n", st->injected);
-    printf("  Unmatched (let through)  : %" PRIu64 "\n", st->unmatched);
+    printf("  Unmatched (let through)  : %" PRIu64 "\n", st->trace_unmatched);
     printf("  Signals replayed         : %" PRIu64 "\n", st->signals_injected);
-    if (st->unmatched > 0)
-        printf("  Tip: unmatched events are usually mmap/brk calls whose "
-               "addresses may differ due to ASLR not being disabled.\n");
 }
 
 int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
@@ -184,8 +173,13 @@ int replay_loop(ReplaySession *s, divergence_report_t *report_out) {
                         events_since_checkpoint = 0;
                     }
                 } else {
-                    // NON_DET but no trace event at this seq — let real syscall run
-                    stats.unmatched++;
+                    // No recorded trace event at this seq_idx — this is a loader/runtime
+                    // mmap/brk/etc. call that was never recorded. Let it through silently.
+                    // Only count as unmatched if trace *does* have an event here (wrong syscall).
+                    if (ev != NULL && s->cursor->seq_counter == ev->seq_idx
+                                   && ev->event_type == SYSCALL_EVENT) {
+                        stats.trace_unmatched++;
+                    }
                 }
             }
 
