@@ -1,0 +1,16 @@
+[ECHOPLAY] Trace loaded. Events recorded: 9
+[ECHOPLAY] Tracee PID=32639 launched
+
+[EchoRun REPL] Commands: continue | step | goto <seq> | peek <addr> | poke <addr> <val> | checkpoints | quit
+echoplay> checkpoints
+[REPL] No checkpoints saved yet.
+echoplay> step
+[TT] Stepping one event...
+
+[EchoRun REPL] Commands: continue | step | goto <seq> | peek <addr> | poke <addr> <val> | checkpoints | quit
+echoplay> goto 3
+[TT] Restoring checkpoint at seq=1, then seeking to seq=3
+[TT] At seq=3. Use 'step' or 'continue'.
+echoplay> quit
+[EchoRun] Exiting.
+[ECHOPLAY] Replay completed successfully.

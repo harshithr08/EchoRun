@@ -1,0 +1,19 @@
+Starting tracee...
+Enter some text: 
+Tracee read 6 bytes.
+[ECHOPLAY] Trace loaded. Events recorded: 9
+[ECHOPLAY] Tracee PID=32637 launched
+[REPLAY] Entry: suppressed syscall=5 seq=3
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=0 seq=5
+[REPLAY] Exit: injected retval=832
+[REPLAY] Entry: suppressed syscall=5 seq=6
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=5 seq=13
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=318 seq=14
+[REPLAY] Exit: injected retval=8
+[REPLAY] Entry: suppressed syscall=0 seq=17
+[REPLAY] Exit: injected retval=6
+[REPLAY] Tracee exited with code 0
+[ECHOPLAY] Replay completed successfully.

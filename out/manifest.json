@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-04-24T06:17:22.173Z",
+  "targets": [
+    {
+      "slug": "stdin-capture",
+      "label": "stdin capture",
+      "description": "Record and replay a typed stdin read.",
+      "command": "./tracee",
+      "eventCount": 38,
+      "diverged": false,
+      "artifactPath": "/out/stdin-capture.artifact.json"
+    },
+    {
+      "slug": "getrandom-capture",
+      "label": "getrandom capture",
+      "description": "Capture getrandom, hostname reads, and stdin replay.",
+      "command": "./tracee2",
+      "eventCount": 43,
+      "diverged": false,
+      "artifactPath": "/out/getrandom-capture.artifact.json"
+    },
+    {
+      "slug": "file-io",
+      "label": "file io mirror",
+      "description": "Mirror file reads across record and replay.",
+      "command": "./tracee3",
+      "eventCount": 46,
+      "diverged": false,
+      "artifactPath": "/out/file-io.artifact.json"
+    },
+    {
+      "slug": "real-binary-ls",
+      "label": "real binary /bin/ls",
+      "description": "Record and stress-replay a real system binary.",
+      "command": "/bin/ls -1 final",
+      "eventCount": 150,
+      "diverged": true,
+      "artifactPath": "/out/real-binary-ls.artifact.json"
+    },
+    {
+      "slug": "divergence-detection",
+      "label": "divergence detection",
+      "description": "Replay a mismatched binary and capture the divergence point.",
+      "command": "./tracee",
+      "eventCount": 38,
+      "diverged": true,
+      "artifactPath": "/out/divergence-detection.artifact.json"
+    },
+    {
+      "slug": "time-travel-repl",
+      "label": "time-travel repl",
+      "description": "Drive step and goto through a scripted REPL session.",
+      "command": "./tracee",
+      "eventCount": 38,
+      "diverged": false,
+      "artifactPath": "/out/time-travel-repl.artifact.json"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+{"seq":0,"traceSeq":0,"kind":"process","lane":"process","category":"process","pid":32639,"syscallNo":4,"syscallName":"exec","eventName":"exec","retval":null,"payloadSize":0,"diverged":false}
+{"seq":1,"traceSeq":null,"kind":"syscall","lane":"side_effect","category":"side_effect","pid":32639,"syscallNo":59,"syscallName":"execve","eventName":"execve","retval":0,"payloadSize":0,"diverged":false}

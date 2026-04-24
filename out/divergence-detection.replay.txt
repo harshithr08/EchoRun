@@ -1,0 +1,15 @@
+[DIVERGENCE] seq_idx=14  expected: getrandom() [318]  got: mmap() [9]
+[ECHOPLAY] Replay DIVERGED at seq=14 expected=318 actual=9
+[ECHOPLAY] Trace loaded. Events recorded: 9
+[ECHOPLAY] Tracee PID=32633 launched
+[REPLAY] Entry: suppressed syscall=5 seq=3
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=0 seq=5
+[REPLAY] Exit: injected retval=832
+[REPLAY] Entry: suppressed syscall=5 seq=6
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=5 seq=13
+[REPLAY] Exit: injected retval=0
+recorder
+replayer
+visualizer

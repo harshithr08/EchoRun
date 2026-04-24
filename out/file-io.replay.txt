@@ -1,0 +1,21 @@
+Read 21 bytes from file: EchoRun file IO test
+OS info: PRETTY_NAME="Ubuntu 24.04.3 LTS"
+File IO test done.
+[ECHOPLAY] Trace loaded. Events recorded: 10
+[ECHOPLAY] Tracee PID=32622 launched
+[REPLAY] Entry: suppressed syscall=5 seq=3
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=0 seq=5
+[REPLAY] Exit: injected retval=832
+[REPLAY] Entry: suppressed syscall=5 seq=6
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=0 seq=13
+[REPLAY] Exit: injected retval=21
+[REPLAY] Entry: suppressed syscall=5 seq=14
+[REPLAY] Exit: injected retval=0
+[REPLAY] Entry: suppressed syscall=318 seq=15
+[REPLAY] Exit: injected retval=8
+[REPLAY] Entry: suppressed syscall=0 seq=18
+[REPLAY] Exit: injected retval=127
+[REPLAY] Tracee exited with code 0
+[ECHOPLAY] Replay completed successfully.

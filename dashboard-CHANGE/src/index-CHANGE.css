@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #1d2738;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at top left, rgba(47, 109, 246, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fb 56%, #e7eef8 100%);
+  background-size: 28px 28px, 28px 28px, auto, auto, auto;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@layer components {
+  .dashboard-shell {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.78)),
+      linear-gradient(180deg, rgba(47, 109, 246, 0.05), rgba(255, 255, 255, 0));
+  }
+
+  .panel-shell {
+    @apply rounded-none border border-border bg-paper shadow-panel;
+  }
+
+  .panel-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(127, 141, 170, 0.7) rgba(220, 226, 238, 0.45);
+    overscroll-behavior: contain;
+  }
+
+  .panel-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .panel-scroll::-webkit-scrollbar-track {
+    background: rgba(220, 226, 238, 0.45);
+  }
+
+  .panel-scroll::-webkit-scrollbar-thumb {
+    background: rgba(127, 141, 170, 0.72);
+  }
+
+  .panel-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(79, 93, 121, 0.9);
+  }
+}
